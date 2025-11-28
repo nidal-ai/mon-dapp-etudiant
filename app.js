@@ -1,87 +1,111 @@
 let provider, signer, contract;
 
-// --- 1. INITIALISATION & TIMER ---
 window.onload = () => {
-    // Vérif config
-    if (typeof CONTRACT_ADDRESS === 'undefined') {
-        alert("Erreur: config.js manquant !"); return;
-    }
-    // Thème
+    if (typeof CONTRACT_ADDRESS === 'undefined') { alert("Erreur: config.js manquant"); return; }
     const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeBtnText(savedTheme);
+    if (savedTheme === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
 
-    // Timer Pro
-    let countdown = 2; 
-    const loadingText = document.getElementById('loading-text');
-    const interval = setInterval(() => {
-        countdown--;
-        if(loadingText) loadingText.innerText = `Chargement système...`;
-        if (countdown <= 0) {
-            clearInterval(interval);
-            endLoading();
+    setTimeout(() => {
+        const loader = document.getElementById('loader-overlay');
+        const content = document.getElementById('app-content');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => {
+                loader.style.display = 'none';
+                content.classList.remove('hidden');
+                setTimeout(() => { content.classList.remove('opacity-0'); }, 50);
+            }, 500);
         }
     }, 1000);
 };
 
-function endLoading() {
-    document.getElementById('loader-overlay').style.display = 'none';
-    document.getElementById('app-content').classList.remove('hidden');
-}
-
-// --- 2. LOGIQUE UTILISATEUR (OUI/NON) ---
-function userHasMetaMask(hasWallet) {
-    document.getElementById('welcome-screen').classList.add('hidden');
-    document.getElementById('connect-section').classList.remove('hidden');
-
-    if (hasWallet) {
-        // L'utilisateur dit OUI
-        checkMetaMaskAvailable();
+window.toggleTheme = function() {
+    const html = document.documentElement;
+    if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
     } else {
-        // L'utilisateur dit NON -> Lien de téléchargement
-        document.getElementById('download-block').classList.remove('hidden');
+        html.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
     }
-}
+};
 
-function checkMetaMaskAvailable() {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    if (window.ethereum) {
-        // MetaMask est vraiment là
-        document.getElementById('connect-block').classList.remove('hidden');
-        
-        // Auto-connexion si déjà autorisé
-        window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
-            if (accounts.length > 0) connectWallet();
-        });
-    } else {
-        // Il a dit OUI mais on ne détecte rien
-        if (isMobile) {
-            // Sur mobile, on propose le Deep Link
+window.handleChoice = function(hasMetaMask) {
+    document.getElementById('welcome-screen').style.opacity = '0';
+    setTimeout(() => {
+        document.getElementById('welcome-screen').classList.add('hidden');
+        document.getElementById('connect-section').classList.remove('hidden');
+        if (hasMetaMask) {
             document.getElementById('connect-block').classList.remove('hidden');
-            document.getElementById('connectBtn').classList.add('hidden'); // Cacher bouton PC
-            document.getElementById('mobile-deep-link').classList.remove('hidden'); // Montrer bouton Mobile
-
-            const currentUrl = window.location.href.replace("https://", "");
-            const deepLink = `https://metamask.app.link/dapp/${currentUrl}`;
-            document.getElementById('mobileBtn').onclick = () => window.location.href = deepLink;
+            checkMobileEnv();
         } else {
-            // Sur PC, il a menti ou c'est désactivé -> On le renvoie au téléchargement
-            alert("MetaMask non détecté sur ce navigateur.");
             document.getElementById('download-block').classList.remove('hidden');
         }
-    }
-}
+    }, 500);
+};
 
-// --- 3. CONNEXION ---
-document.getElementById('connectBtn').addEventListener('click', connectWallet);
+window.goBack = function() {
+    if (!document.getElementById('dashboard').classList.contains('hidden')) {
+        location.reload(); return;
+    }
+    document.getElementById('connect-block').classList.add('hidden');
+    document.getElementById('download-block').classList.add('hidden');
+    document.getElementById('connect-section').classList.add('hidden');
+    const welcome = document.getElementById('welcome-screen');
+    welcome.classList.remove('hidden');
+    setTimeout(() => { welcome.style.opacity = '1'; }, 50);
+};
+
+window.checkMobileEnv = function() {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile && !window.ethereum) {
+        document.getElementById('connectBtn').classList.add('hidden');
+        document.getElementById('mobile-deep-link').classList.remove('hidden');
+        const currentUrl = window.location.href.replace("https://", "");
+        const deepLink = `https://metamask.app.link/dapp/${currentUrl}`;
+        document.getElementById('mobileBtn').onclick = () => window.location.href = deepLink;
+    }
+};
+
+window.addStudent = async function() {
+    const fName = document.getElementById('fName').value;
+    const lName = document.getElementById('lName').value;
+    const dob = document.getElementById('dob').value;
+    const avg = document.getElementById('avg').value;
+    const statusMsg = document.getElementById('status-msg');
+
+    if (!fName || !lName || !avg) return alert("Veuillez remplir tous les champs");
+
+    try {
+        statusMsg.innerText = "Signature requise...";
+        statusMsg.className = "text-blue-500 animate-pulse text-xs mt-4 text-center font-medium";
+        const tx = await contract.addStudent(fName, lName, dob, avg);
+        statusMsg.innerText = "Envoi transaction...";
+        await tx.wait();
+        statusMsg.innerText = "Enregistré avec succès !";
+        statusMsg.className = "text-emerald-500 font-bold text-xs mt-4 text-center";
+        
+        document.getElementById('fName').value = "";
+        document.getElementById('lName').value = "";
+        document.getElementById('avg').value = "";
+        loadStudents();
+    } catch (error) {
+        console.error(error);
+        statusMsg.innerText = "Erreur Transaction";
+        statusMsg.className = "text-red-500 text-xs mt-4 text-center font-medium";
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const connectBtn = document.getElementById('connectBtn');
+    if (connectBtn) connectBtn.addEventListener('click', connectWallet);
+});
 
 async function connectWallet() {
-    if (!window.ethereum) return;
+    if (!window.ethereum) return alert("MetaMask introuvable");
     try {
         await window.ethereum.request({ method: 'eth_requestAccounts' });
-        
-        // Force Sepolia
         const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         if (chainId !== '0xaa36a7') {
              try {
@@ -89,7 +113,7 @@ async function connectWallet() {
                     method: 'wallet_switchEthereumChain',
                     params: [{ chainId: '0xaa36a7' }],
                 });
-            } catch (e) { alert("Changez le réseau vers Sepolia !"); return; }
+            } catch (e) { alert("Réseau Sepolia requis"); return; }
         }
         initApp();
     } catch (err) { console.error(err); }
@@ -102,119 +126,92 @@ async function initApp() {
 
     document.getElementById('connect-section').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
+    document.getElementById('logoutBtn').classList.remove('hidden');
+    document.getElementById('logoutBtn').classList.add('flex');
+    document.getElementById('nav-badge').classList.remove('hidden');
+    
     loadStudents();
 }
 
-// --- 4. AJOUT ÉTUDIANT ---
-async function addStudent() {
-    const fName = document.getElementById('fName').value;
-    const lName = document.getElementById('lName').value;
-    const dob = document.getElementById('dob').value;
-    const avg = document.getElementById('avg').value;
-    const statusMsg = document.getElementById('status-msg');
-
-    if (!fName || !lName || !avg) return alert("Remplissez tout !");
-
-    try {
-        statusMsg.innerText = "Signature requise...";
-        statusMsg.style.color = "var(--primary)";
-
-        const tx = await contract.addStudent(fName, lName, dob, avg);
-        statusMsg.innerText = "Transaction envoyée... Attente confirmation.";
-        
-        await tx.wait(); 
-
-        statusMsg.innerText = "✅ Enregistré sur Blockchain !";
-        statusMsg.style.color = "#10b981";
-        
-        // Reset
-        document.getElementById('fName').value = "";
-        document.getElementById('lName').value = "";
-        document.getElementById('avg').value = "";
-        
-        // Recharger (ça va chercher le nouveau hash automatiquement)
-        loadStudents();
-
-    } catch (error) {
-        console.error(error);
-        statusMsg.innerText = "Erreur : " + error.message;
-        statusMsg.style.color = "#ef4444";
-    }
-}
-
-// --- 5. CHARGEMENT INTELLIGENT (AVEC VRAIS HASHES) ---
 async function loadStudents() {
     const tableBody = document.getElementById('tableBody');
-    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Chargement depuis la Blockchain...</td></tr>';
+    if(!tableBody) return;
+    
+    tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Chargement...</td></tr>';
     
     try {
         const myAddress = await signer.getAddress();
-        
-        // A. On récupère les étudiants
         const students = await contract.getMyStudents();
-
-        // B. TECHNIQUE PRO : On récupère l'historique des événements "StudentAdded"
-        // pour retrouver les Hashes de transaction
         const filter = contract.filters.StudentAdded(myAddress);
         const events = await contract.queryFilter(filter);
-
-        // On crée un dictionnaire : ID -> Hash
         const idToHash = {};
-        events.forEach(event => {
-            // event.args[1] est l'ID dans l'événement StudentAdded(user, id, name)
-            const id = event.args[1].toString();
-            idToHash[id] = event.transactionHash;
-        });
+        events.forEach(e => { idToHash[e.args[1].toString()] = e.transactionHash; });
 
-        tableBody.innerHTML = ""; // On vide le chargement
+        tableBody.innerHTML = "";
+        
+        let verifiedCount = 0;
+        let realTotalCount = 0;
 
         if (students.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding:20px;">Aucun étudiant.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Aucun dossier.</td></tr>`;
+            document.getElementById('stat-total').innerText = "0";
+            document.getElementById('footer-count').innerText = "Total: 0 dossier(s)";
             return;
         }
 
-        // On inverse la boucle pour voir les nouveaux en premier (optionnel, sinon forEach classique)
-        for(let i = 0; i < students.length; i++) {
+        for(let i = students.length - 1; i >= 0; i--) {
             const s = students[i];
             if (s.exists) {
-                // On cherche le vrai hash venant de l'événement
+                realTotalCount++;
                 const realHash = idToHash[s.id.toString()];
+                if(realHash) verifiedCount++;
                 
-                let hashDisplay = "...";
-                if (realHash) {
-                    hashDisplay = `<a href="https://sepolia.etherscan.io/tx/${realHash}" target="_blank" class="hash-link">
-                        ${realHash.substring(0, 10)}... ↗
-                    </a>`;
-                } else {
-                    hashDisplay = `<span style="opacity:0.5">Ancien (Non-indexé)</span>`;
+                let hashDisplay = realHash ? 
+                    `<a href="https://sepolia.etherscan.io/tx/${realHash}" target="_blank" class="inline-block px-2 py-1 rounded bg-indigo-100 text-indigo-600 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 text-xs font-mono hover:bg-indigo-200 dark:hover:bg-indigo-500/20 transition-colors">HASH ↗</a>` : 
+                    `<span class="text-gray-400 dark:text-slate-600 text-xs">En attente</span>`;
+
+                // --- FORMATAGE DATE (YYYY-MM-DD -> DD/MM/YYYY) ---
+                let dateDisplay = s.dob;
+                if (s.dob && s.dob.includes('-')) {
+                    const [yyyy, mm, dd] = s.dob.split('-');
+                    dateDisplay = `${dd}/${mm}/${yyyy}`;
                 }
 
-                const row = `
-                    <tr>
-                        <td><b>#${s.id}</b></td>
-                        <td>${s.firstName} ${s.lastName}</td>
-                        <td>${s.dob}</td>
-                        <td><span style="color:var(--primary); font-weight:bold">${s.average}/20</span></td>
-                        <td>${hashDisplay}</td>
-                    </tr>
-                `;
+                const row = `<tr class="border-b border-gray-200 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                        <td class="py-3 px-4 font-bold text-left text-gray-900 dark:text-white">${s.firstName}</td>
+                        <td class="py-3 px-4 font-bold text-left text-gray-900 dark:text-white">${s.lastName}</td>
+                        <td class="py-3 px-4 text-center text-gray-600 dark:text-slate-400">${dateDisplay}</td>
+                        <td class="py-3 px-4 text-center"><span class="px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 font-bold text-xs">${s.average}/20</span></td>
+                        <td class="py-3 px-4 text-center">${hashDisplay}</td>
+                    </tr>`;
                 tableBody.innerHTML += row;
             }
         }
-    } catch (err) { 
-        console.error("Erreur chargement:", err); 
-        tableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:red">Erreur Web3</td></tr>`;
-    }
+
+        document.getElementById('stat-total').innerText = realTotalCount;
+        document.getElementById('stat-verified').innerText = verifiedCount;
+        document.getElementById('footer-count').innerText = `Total: ${realTotalCount} dossier(s) enregistré(s) sur la blockchain`;
+
+    } catch (err) { console.error(err); }
 }
 
-// Thème
-function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme');
-    const target = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', target);
-    localStorage.setItem('theme', target);
-    updateThemeBtnText(target);
-}
-function updateThemeBtnText(theme) {
-    document.querySelector('.theme-toggle').innerText = theme === 'dark' ? '☀ Mode Jour' : '☾ Mode Nuit';
-}
+window.filterStudents = function() {
+    const input = document.getElementById('searchInput');
+    const filter = input.value.toUpperCase();
+    const table = document.getElementById('studentTable');
+    const tr = table.getElementsByTagName('tr');
+
+    for (let i = 0; i < tr.length; i++) {
+        const tdFirst = tr[i].getElementsByTagName("td")[0]; 
+        const tdLast = tr[i].getElementsByTagName("td")[1];
+        if (tdFirst || tdLast) {
+            const txtValueFirst = tdFirst.textContent || tdFirst.innerText;
+            const txtValueLast = tdLast.textContent || tdLast.innerText;
+            if (txtValueFirst.toUpperCase().indexOf(filter) > -1 || txtValueLast.toUpperCase().indexOf(filter) > -1) {
+                tr[i].style.display = "";
+            } else {
+                tr[i].style.display = "none";
+            }
+        }       
+    }
+};

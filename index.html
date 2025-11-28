@@ -1,251 +1,196 @@
-
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Ledger - Web3</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+    <title>Student Ledger | Web3</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        background: "var(--bg-color)",
+                        surface: "var(--surface-color)",
+                        border: "var(--border-color)",
+                        textMain: "var(--text-color)",
+                        primary: "#6366f1",
+                        accent: "#3b82f6",
+                    },
+                    boxShadow: {
+                        'neon': '0 0 20px rgba(59, 130, 246, 0.15)',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Space Grotesk', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+
     <style>
         :root {
-            /* Palette Dark Mode "Fintech" */
-            --bg-color: #0b0f19;       
-            --card-bg: #151b2b;        
-            --text-main: #f1f5f9;      
-            --text-muted: #94a3b8;     
-            --primary: #6366f1;        
-            --primary-hover: #4f46e5;
-            --border: #1e293b;
-            --input-bg: #0b0f19;
-            --success: #10b981;
+            --bg-color: #f8fafc; --surface-color: #ffffff; --border-color: #e2e8f0; --text-color: #0f172a; --glow-opacity: 0.05;
         }
-
-        [data-theme="light"] {
-            --bg-color: #f8fafc;
-            --card-bg: #ffffff;
-            --text-main: #0f172a;
-            --text-muted: #475569;
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --border: #e2e8f0;
-            --input-bg: #f1f5f9;
+        .dark {
+            --bg-color: #05070a; --surface-color: rgba(20, 25, 35, 0.8); --border-color: rgba(255, 255, 255, 0.1); --text-color: #ffffff; --glow-opacity: 0.4;
         }
-
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: var(--bg-color); 
-            color: var(--text-main); 
-            margin: 0; padding: 0; 
-            min-height: 100vh; 
-            display: flex; flex-direction: column; align-items: center; 
-            transition: background-color 0.4s ease;
+        body {
+            background-image: radial-gradient(circle at 10% 20%, rgba(99, 102, 241, var(--glow-opacity)), transparent 40%),
+                              radial-gradient(circle at 90% 80%, rgba(59, 130, 246, var(--glow-opacity)), transparent 40%);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
-
-        /* --- ANIMATIONS CASCADES --- */
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        .cyber-card {
+            background: var(--surface-color); backdrop-filter: blur(12px); border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: all 0.3s ease;
         }
-
-        .anim-1 { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; }
-        .anim-2 { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards; opacity: 0; } /* Délai 0.2s */
-        .anim-3 { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s forwards; opacity: 0; } /* Délai 0.4s */
-
-        /* --- LOADER --- */
-        #loader-overlay { position: fixed; inset: 0; background: var(--bg-color); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.6s ease-out; }
-        .spinner-ring { width: 60px; height: 60px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 25px; }
-        
-        /* --- NAVBAR --- */
-        .navbar { 
-            width: 100%; max-width: 1100px; padding: 25px 20px; 
-            display: flex; justify-content: space-between; align-items: center; 
-            box-sizing: border-box;
-        }
-        .brand { 
-            font-family: 'Space Grotesk', sans-serif; /* Police titre */
-            font-size: 1.5rem; font-weight: 700; letter-spacing: -1px; 
-            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%); 
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        [data-theme="light"] .brand { background: linear-gradient(135deg, #0f172a 0%, #4f46e5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-
-        .theme-toggle { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; transition: 0.3s; }
-        .theme-toggle:hover { border-color: var(--primary); color: var(--primary); }
-
-        /* --- CONTAINERS --- */
-        .main-container { width: 90%; max-width: 900px; margin-top: 60px; padding-bottom: 50px; }
-        
-        .card { 
-            background-color: var(--card-bg); border: 1px solid var(--border); 
-            border-radius: 16px; padding: 40px; margin-bottom: 25px; 
-            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.2);
-        }
-
-        /* --- ACCUEIL (Welcome Screen) --- */
-        .welcome-box {
-            max-width: 650px; margin: 0 auto; text-align: center; border: none; background: transparent; box-shadow: none;
-        }
-        .welcome-title { 
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 3.5rem; font-weight: 700; margin-bottom: 20px; line-height: 1.1; 
-            background: linear-gradient(135deg, var(--text-main) 0%, var(--text-muted) 100%);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .welcome-text { 
-            color: var(--text-muted); font-size: 1.25rem; line-height: 1.6; margin-bottom: 50px; font-weight: 400;
-        }
-
-        /* --- INPUTS & BOUTONS --- */
-        input { 
-            width: 100%; padding: 16px; background-color: var(--input-bg); 
-            border: 1px solid var(--border); border-radius: 8px; 
-            color: var(--text-main); margin-bottom: 15px; box-sizing: border-box; 
-            font-family: inherit; transition: border-color 0.3s;
-        }
-        input:focus { outline: none; border-color: var(--primary); }
-
-        .btn-primary { 
-            background-color: var(--primary); color: white; border: none; 
-            padding: 16px 32px; border-radius: 12px; font-weight: 600; cursor: pointer; 
-            width: 100%; font-size: 1rem; transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
-            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);
-        }
-        .btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 6px 25px rgba(99, 102, 241, 0.4); }
-        
-        .btn-outline { 
-            background: transparent; border: 2px solid var(--border); color: var(--text-main); 
-            padding: 14px 24px; border-radius: 12px; font-weight: 600; cursor: pointer; 
-            width: 100%; font-size: 1rem; transition: 0.3s; 
-        }
-        .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: rgba(99, 102, 241, 0.05); }
-
-        .btn-row { display: flex; gap: 20px; justify-content: center; margin-top: 10px; }
-
-        /* --- TABLEAU --- */
-        .table-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-        th { text-align: left; padding: 18px; background-color: rgba(255,255,255,0.02); color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border); }
-        td { padding: 18px; border-bottom: 1px solid var(--border); color: var(--text-main); }
-        tr:last-child td { border-bottom: none; }
-        
-        .hash-link { 
-            color: var(--primary); font-family: 'Monaco', monospace; 
-            background: rgba(99, 102, 241, 0.1); padding: 6px 12px; border-radius: 6px; 
-            font-size: 0.85rem; text-decoration: none; display: inline-block; transition: 0.2s;
-        }
-        .hash-link:hover { background: rgba(99, 102, 241, 0.2); transform: translateY(-1px); }
-
+        .dark .cyber-card { box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.05), 0 10px 30px -5px rgba(0,0,0,0.5); }
+        input { background-color: var(--bg-color); color: var(--text-color); border-color: var(--border-color); }
+        .dark input { background-color: #0a0c12; border-color: rgba(255,255,255,0.1); }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg-color); } ::-webkit-scrollbar-thumb { background: #64748b; border-radius: 3px; }
         .hidden { display: none !important; }
-        .text-center { text-align: center; }
-        
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        /* Ajustements Mobile */
-        @media (max-width: 600px) {
-            .welcome-title { font-size: 2.5rem; }
-            .btn-row { flex-direction: column; gap: 10px; }
-        }
     </style>
 </head>
-<body>
+<body class="bg-background text-textMain min-h-screen flex flex-col font-sans antialiased">
 
-    <div id="loader-overlay">
-        <div class="spinner-ring"></div>
-        <div id="loading-text" style="color: var(--text-muted); font-size: 0.9rem; letter-spacing: 2px; font-weight: 600;">INITIALISATION...</div>
+    <div id="loader-overlay" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background transition-colors duration-300">
+        <div class="w-16 h-16 border-4 border-blue-900 border-t-blue-500 rounded-full animate-spin"></div>
+        <div class="mt-4 text-xs tracking-[0.3em] text-blue-500 font-bold animate-pulse">INITIALISATION</div>
     </div>
 
-    <nav class="navbar">
-        <div class="brand">Student Ledger</div>
-        <button class="theme-toggle" onclick="toggleTheme()">☀</button>
+    <nav class="fixed top-0 w-full z-40 border-b border-border bg-background/80 backdrop-blur-xl transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                </div>
+                <div>
+                    <h1 class="font-display text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 to-slate-900 dark:from-white dark:to-slate-400">Student Ledger</h1>
+                    <div id="nav-badge" class="hidden text-[10px] text-emerald-500 font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Connecté
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="logoutBtn" onclick="goBack()" class="hidden px-4 py-2 text-sm text-slate-500 hover:text-primary border border-border hover:border-primary rounded-lg transition-all flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    <span class="hidden sm:inline">Retour</span>
+                </button>
+                <button onclick="toggleTheme()" class="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-300 dark:border-white/10 hover:border-primary transition-all text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary bg-white dark:bg-transparent">
+                    <span class="hidden dark:flex items-center gap-2"><svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg> Mode Jour</span>
+                    <span class="flex dark:hidden items-center gap-2"><svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg> Mode Nuit</span>
+                </button>
+            </div>
+        </div>
     </nav>
 
-    <div class="main-container hidden" id="app-content">
-        
-        <div id="welcome-screen" class="welcome-box">
-            <h1 class="welcome-title anim-1">Student Ledger</h1>
-            
-            <p class="welcome-text anim-2">
-                Bienvenue dans Student Ledger, la web app décentralisée pour gérer et sécuriser les bases de données des étudiants sur la blockchain.
-            </p>
-            
-            <div class="anim-3" style="background: var(--card-bg); padding: 30px; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-                <h3 style="margin-top:0; margin-bottom: 20px; font-weight: 600;">Avez-vous un portefeuille MetaMask ?</h3>
-                <div class="btn-row">
-                    <button class="btn-primary" onclick="userHasMetaMask(true)">Oui, j'ai MetaMask</button>
-                    <button class="btn-outline" onclick="userHasMetaMask(false)">Non, je ne l'ai pas</button>
+    <main id="app-content" class="flex-1 flex flex-col pt-24 px-4 w-full max-w-7xl mx-auto hidden opacity-0 transition-opacity duration-700">
+        <section id="welcome-screen" class="flex-1 flex flex-col items-center justify-center text-center py-12">
+            <h1 class="font-display text-5xl md:text-7xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-b from-slate-900 to-slate-500 dark:from-white dark:to-slate-500 tracking-tight">Student Ledger</h1>
+            <p class="text-slate-500 dark:text-slate-400 text-lg md:text-xl mb-12 max-w-2xl mx-auto leading-relaxed">Bienvenue dans Student Ledger, la web app décentralisée pour gérer et sécuriser les bases de données des étudiants sur la blockchain.</p>
+            <div class="cyber-card p-1 rounded-3xl inline-block">
+                <div class="bg-background/50 rounded-[20px] p-8 md:p-12">
+                    <h3 class="text-xl font-semibold mb-8">Avez-vous un portefeuille MetaMask ?</h3>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <button onclick="handleChoice(true)" class="px-8 py-4 bg-primary hover:bg-indigo-500 rounded-xl font-semibold text-white shadow-lg transition-all w-full sm:w-auto">Oui, j'ai MetaMask</button>
+                        <button onclick="handleChoice(false)" class="px-8 py-4 bg-transparent border border-border hover:border-slate-400 rounded-xl font-semibold text-slate-500 dark:text-slate-300 hover:text-textMain transition-all w-full sm:w-auto">Non, je ne l'ai pas</button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <div id="connect-section" class="text-center hidden" style="margin-top: 50px; max-width: 500px; margin-left: auto; margin-right: auto;">
-            
-            <div id="connect-block" class="card hidden anim-1">
-                <div style="font-size: 3rem; margin-bottom: 20px;">🦊</div>
-                <h3>Synchronisation Web3</h3>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Portefeuille détecté. Veuillez établir la connexion sécurisée.</p>
-                <button class="btn-primary" id="connectBtn">Connecter mon Portefeuille</button>
-                
-                <div id="mobile-deep-link" class="hidden" style="margin-top: 20px;">
-                    <button id="mobileBtn" class="btn-primary" style="background: linear-gradient(45deg, #f7971e, #ffd200); color: #000;">
-                        Ouvrir dans l'App MetaMask
-                    </button>
+        <section id="connect-section" class="hidden flex-1 flex flex-col items-center justify-center py-12">
+            <div id="connect-block" class="cyber-card p-10 rounded-3xl max-w-md w-full text-center hidden">
+                <div class="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-blue-500/20"><span class="text-3xl">🦊</span></div>
+                <h2 class="text-2xl font-bold mb-4">Connexion Requise</h2>
+                <p class="text-slate-500 dark:text-slate-400 mb-8 text-sm leading-relaxed">Connectez votre portefeuille pour payer le Gas et sécuriser l'immuabilité des données.</p>
+                <button id="connectBtn" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl font-bold text-white shadow-lg transition-all">Connecter</button>
+                <div id="mobile-deep-link" class="hidden mt-4"><button id="mobileBtn" class="w-full py-3 bg-orange-500 text-black font-bold rounded-xl">Ouvrir App MetaMask</button></div>
+                <button onclick="goBack()" class="mt-6 text-xs text-slate-500 hover:text-primary flex items-center justify-center gap-1 mx-auto">← Retour</button>
+                <p id="error-msg" class="text-red-500 text-xs mt-4 hidden"></p>
+            </div>
+            <div id="download-block" class="cyber-card p-10 rounded-3xl max-w-md w-full text-center hidden">
+                <div class="text-4xl mb-6">⚠️</div>
+                <h2 class="text-xl font-bold text-red-500 mb-4">Wallet Manquant</h2>
+                <p class="text-slate-500 dark:text-slate-400 mb-8 text-sm">L'installation de MetaMask est requise.</p>
+                <a href="https://metamask.io/download/" target="_blank" class="block w-full py-3 bg-slate-800 text-white rounded-xl border border-white/10 hover:bg-slate-700 transition-all font-semibold">Télécharger</a>
+                <button onclick="goBack()" class="mt-6 text-xs text-slate-500 hover:text-primary">← Retour</button>
+            </div>
+        </section>
+
+        <section id="dashboard" class="hidden w-full pb-12 animate-fade-in-up">
+            <h2 class="text-3xl font-display font-bold mb-2">Tableau de Bord</h2>
+            <p class="text-slate-500 dark:text-slate-400 mb-8">Gérez les dossiers académiques sur la blockchain</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="cyber-card rounded-2xl p-6 flex items-center justify-between group">
+                    <div><p class="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1">Total Étudiants</p><h3 id="stat-total" class="text-3xl font-bold group-hover:text-blue-500 transition-colors">0</h3></div>
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg></div>
+                </div>
+                <div class="cyber-card rounded-2xl p-6 flex items-center justify-between group">
+                    <div><p class="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1">Dossiers Vérifiés</p><h3 id="stat-verified" class="text-3xl font-bold group-hover:text-emerald-500 transition-colors">0</h3></div>
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>
+                </div>
+                <div class="cyber-card rounded-2xl p-6 flex items-center justify-between">
+                    <div><p class="text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1">Réseau</p><h3 class="text-3xl font-bold text-purple-500">Sepolia</h3></div>
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500 border border-purple-500/20"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg></div>
                 </div>
             </div>
 
-            <div id="download-block" class="card hidden anim-1">
-                <div style="font-size: 3rem; margin-bottom: 20px;">⚠️</div>
-                <h3 style="color: #ef4444;">Accès Restreint</h3>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">L'écriture sur la Blockchain nécessite un portefeuille numérique.</p>
-                
-                <a href="https://metamask.io/download/" target="_blank" class="btn-primary" style="display:block; text-decoration:none; margin-bottom: 15px;">
-                    Télécharger MetaMask
-                </a>
-                <button class="btn-outline" onclick="location.reload()">Retour</button>
-            </div>
-        </div>
-
-        <div id="dashboard" class="hidden anim-1">
-            
-            <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
-                    <h3 style="margin:0; font-family: 'Space Grotesk', sans-serif;">Nouveau Dossier</h3>
-                    <span style="font-size:0.75rem; color:var(--success); background: rgba(16, 185, 129, 0.1); padding: 6px 12px; border-radius: 20px; font-weight: 600; letter-spacing: 0.5px;">● LIVE SEPOLIA</span>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                <div class="cyber-card rounded-3xl p-8 lg:col-span-1 border-t-4 border-t-blue-500">
+                    <div class="flex items-center gap-3 mb-8">
+                        <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-lg"><span class="text-xl font-bold">+</span></div>
+                        <h3 class="text-xl font-bold">Ajouter un Étudiant</h3>
+                    </div>
+                    <div class="space-y-6">
+                        <div><label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Prénom</label><input type="text" id="fName" class="w-full rounded-xl px-4 py-3.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all" placeholder="Entrez le prénom"></div>
+                        <div><label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Nom</label><input type="text" id="lName" class="w-full rounded-xl px-4 py-3.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all" placeholder="Entrez le nom"></div>
+                        <div><label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Date de naissance</label><input type="date" id="dob" max="9999-12-31" class="w-full rounded-xl px-4 py-3.5 focus:border-blue-500 outline-none"></div>
+                        <div><label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 ml-1">Moyenne (/20)</label><input type="number" id="avg" class="w-full rounded-xl px-4 py-3.5 focus:border-blue-500 outline-none" placeholder="Ex: 15.5"></div>
+                    </div>
+                    <button onclick="addStudent()" class="w-full mt-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl font-bold shadow-lg transition-all active:scale-95">+ Enregistrer</button>
+                    <p id="status-msg" class="text-center text-xs mt-4 font-medium min-h-[20px] text-slate-400"></p>
                 </div>
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <input type="text" id="fName" placeholder="Prénom">
-                    <input type="text" id="lName" placeholder="Nom">
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <input type="date" id="dob">
-                    <input type="number" id="avg" placeholder="Moyenne (0-20)">
-                </div>
-                
-                <button class="btn-primary" onclick="addStudent()" style="margin-top: 10px;">Enregistrer sur la Blockchain</button>
-                <p id="status-msg" class="text-center" style="margin-top:20px; font-weight: 500; font-size: 0.9rem;"></p>
-            </div>
-
-            <div class="card">
-                <h3 style="margin-top:0; margin-bottom: 25px; font-family: 'Space Grotesk', sans-serif;">Registre (Ledger)</h3>
-                <div class="table-wrapper">
-                    <table id="studentTable">
-                        <thead>
-                            <tr>
-                                <th style="width: 60px;">ID</th>
-                                <th>Étudiant</th>
-                                <th>Date Naissance</th>
-                                <th>Note</th>
-                                <th>Hash (Preuve)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tableBody"></tbody>
-                    </table>
+                <div class="cyber-card rounded-3xl p-8 lg:col-span-2 min-h-[500px] border-t-4 border-t-indigo-500">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-500 flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></div>
+                            <h3 class="text-xl font-bold">Registre Académique</h3>
+                        </div>
+                        <div class="relative w-full sm:w-64">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div>
+                            <input type="text" id="searchInput" onkeyup="filterStudents()" class="w-full bg-transparent border border-border rounded-lg pl-10 pr-4 py-2 text-sm focus:border-indigo-500 outline-none" placeholder="Rechercher...">
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto rounded-xl border border-border">
+                        <table id="studentTable" class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-black/5 dark:bg-white/5 border-b border-border">
+                                    <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-left">Prénom</th>
+                                    <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-left">Nom</th>
+                                    <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Date</th>
+                                    <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Moyenne</th>
+                                    <th class="py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-border text-sm"></tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 text-xs text-slate-500 text-center" id="footer-count">Total: 0 dossier(s) enregistré(s) sur la blockchain</div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
+    <footer class="w-full py-6 text-center text-slate-500 text-xs border-t border-border mt-auto bg-background">Technologie Blockchain • Conception & Développement par <span class="text-blue-500 font-bold">Nidal Eyoub</span></footer>
     <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
