@@ -1,65 +1,87 @@
 let provider, signer, contract;
-const CONTRACT_ADDR = CONTRACT_ADDRESS; // Vient de config.js
-
-// Éléments DOM
-const loader = document.getElementById('loader-overlay');
-const appContent = document.getElementById('app-content');
-const connectSection = document.getElementById('connect-section');
-const dashboard = document.getElementById('dashboard');
-const connectBtn = document.getElementById('connectBtn');
-const statusMsg = document.getElementById('status-msg');
-const tableBody = document.getElementById('tableBody');
 
 // --- 1. INITIALISATION & TIMER ---
 window.onload = () => {
-    // Gestion du thème précédent
+    // Vérif config
+    if (typeof CONTRACT_ADDRESS === 'undefined') {
+        alert("Erreur: config.js manquant !"); return;
+    }
+    // Thème
     const savedTheme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
     updateThemeBtnText(savedTheme);
 
-    // Timer de 2.5 secondes pour "l'effet pro"
-    setTimeout(() => {
-        loader.style.opacity = '0';
-        setTimeout(() => {
-            loader.style.display = 'none';
-            appContent.classList.remove('hidden');
-            checkConnection();
-        }, 500);
-    }, 2500);
+    // Timer Pro
+    let countdown = 2; 
+    const loadingText = document.getElementById('loading-text');
+    const interval = setInterval(() => {
+        countdown--;
+        if(loadingText) loadingText.innerText = `Chargement système...`;
+        if (countdown <= 0) {
+            clearInterval(interval);
+            endLoading();
+        }
+    }, 1000);
 };
 
-// --- 2. GESTION DU THÈME ---
-function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme');
-    const target = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', target);
-    localStorage.setItem('theme', target);
-    updateThemeBtnText(target);
+function endLoading() {
+    document.getElementById('loader-overlay').style.display = 'none';
+    document.getElementById('app-content').classList.remove('hidden');
 }
 
-function updateThemeBtnText(theme) {
-    const btn = document.querySelector('.theme-toggle');
-    btn.innerText = theme === 'dark' ? '☀ Mode Jour' : '☾ Mode Nuit';
-}
+// --- 2. LOGIQUE UTILISATEUR (OUI/NON) ---
+function userHasMetaMask(hasWallet) {
+    document.getElementById('welcome-screen').classList.add('hidden');
+    document.getElementById('connect-section').classList.remove('hidden');
 
-// --- 3. CONNEXION METAMASK ---
-async function checkConnection() {
-    if (window.ethereum) {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-        if (accounts.length > 0) {
-            initApp();
-        }
+    if (hasWallet) {
+        // L'utilisateur dit OUI
+        checkMetaMaskAvailable();
     } else {
-        document.getElementById('install-alert').classList.remove('hidden');
-        connectBtn.style.display = 'none';
+        // L'utilisateur dit NON -> Lien de téléchargement
+        document.getElementById('download-block').classList.remove('hidden');
     }
 }
 
-connectBtn.addEventListener('click', async () => {
+function checkMetaMaskAvailable() {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (window.ethereum) {
+        // MetaMask est vraiment là
+        document.getElementById('connect-block').classList.remove('hidden');
+        
+        // Auto-connexion si déjà autorisé
+        window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
+            if (accounts.length > 0) connectWallet();
+        });
+    } else {
+        // Il a dit OUI mais on ne détecte rien
+        if (isMobile) {
+            // Sur mobile, on propose le Deep Link
+            document.getElementById('connect-block').classList.remove('hidden');
+            document.getElementById('connectBtn').classList.add('hidden'); // Cacher bouton PC
+            document.getElementById('mobile-deep-link').classList.remove('hidden'); // Montrer bouton Mobile
+
+            const currentUrl = window.location.href.replace("https://", "");
+            const deepLink = `https://metamask.app.link/dapp/${currentUrl}`;
+            document.getElementById('mobileBtn').onclick = () => window.location.href = deepLink;
+        } else {
+            // Sur PC, il a menti ou c'est désactivé -> On le renvoie au téléchargement
+            alert("MetaMask non détecté sur ce navigateur.");
+            document.getElementById('download-block').classList.remove('hidden');
+        }
+    }
+}
+
+// --- 3. CONNEXION ---
+document.getElementById('connectBtn').addEventListener('click', connectWallet);
+
+async function connectWallet() {
     if (!window.ethereum) return;
     try {
         await window.ethereum.request({ method: 'eth_requestAccounts' });
-        // Forcer Sepolia
+        
+        // Force Sepolia
         const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         if (chainId !== '0xaa36a7') {
              try {
@@ -67,99 +89,104 @@ connectBtn.addEventListener('click', async () => {
                     method: 'wallet_switchEthereumChain',
                     params: [{ chainId: '0xaa36a7' }],
                 });
-            } catch (e) { alert("Veuillez changer le réseau vers Sepolia."); return; }
+            } catch (e) { alert("Changez le réseau vers Sepolia !"); return; }
         }
         initApp();
     } catch (err) { console.error(err); }
-});
+}
 
 async function initApp() {
     provider = new ethers.BrowserProvider(window.ethereum);
     signer = await provider.getSigner();
-    contract = new ethers.Contract(CONTRACT_ADDR, CONTRACT_ABI, signer);
+    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-    // Transition fluide
-    connectSection.classList.add('hidden');
-    dashboard.classList.remove('hidden');
+    document.getElementById('connect-section').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
     loadStudents();
 }
 
-// --- 4. AJOUT ÉTUDIANT & SAUVEGARDE HASH ---
+// --- 4. AJOUT ÉTUDIANT ---
 async function addStudent() {
     const fName = document.getElementById('fName').value;
     const lName = document.getElementById('lName').value;
     const dob = document.getElementById('dob').value;
     const avg = document.getElementById('avg').value;
+    const statusMsg = document.getElementById('status-msg');
 
-    if (!fName || !lName || !avg) return alert("Veuillez remplir tous les champs.");
+    if (!fName || !lName || !avg) return alert("Remplissez tout !");
 
     try {
-        statusMsg.innerText = "Signature de la transaction en cours...";
+        statusMsg.innerText = "Signature requise...";
         statusMsg.style.color = "var(--primary)";
 
         const tx = await contract.addStudent(fName, lName, dob, avg);
+        statusMsg.innerText = "Transaction envoyée... Attente confirmation.";
         
-        statusMsg.innerText = "Envoi à la Blockchain... Veuillez patienter.";
-        
-        // Attendre la confirmation
-        const receipt = await tx.wait();
-        
-        // --- ASTUCE PRO : On récupère l'ID du nouvel étudiant ---
-        // Comme on ne peut pas lire le return value d'une transaction d'écriture facilement,
-        // on va recharger la liste et déduire que le dernier est le nôtre, 
-        // OU simplement stocker le hash pour le "prochain ID" si on suit le compteur local.
-        // Méthode simple : On stocke le hash associé à ce moment précis.
-        
-        // On récupère le compteur actuel pour savoir quel ID a été attribué (approx)
-        // Mais pour faire simple et fiable pour ton prof : 
-        // On sauvegarde le TxHash. Au rechargement, on ne saura pas quel ID = quel Hash sans Event.
-        // Solution : On associe ce Hash au "Dernier étudiant ajouté" dans le localStorage.
-        
-        // Pour ton besoin "Click hash -> See Data", le lien Etherscan suffit.
-        // On va sauvegarder : Key="tx_hash_ID_X", Value="0x123..."
-        
-        // Recharger pour avoir le nouvel ID
-        const students = await contract.getAllStudents();
-        const newId = students[students.length - 1].id.toString(); // Le dernier ID
-        
-        // SAUVEGARDE DANS LE NAVIGATEUR
-        localStorage.setItem(`hash_student_${newId}`, tx.hash);
+        await tx.wait(); 
 
-        statusMsg.innerText = "Succès ! Étudiant ajouté au registre.";
-        statusMsg.style.color = "#10b981"; // Vert
+        statusMsg.innerText = "✅ Enregistré sur Blockchain !";
+        statusMsg.style.color = "#10b981";
         
         // Reset
         document.getElementById('fName').value = "";
         document.getElementById('lName').value = "";
+        document.getElementById('avg').value = "";
         
+        // Recharger (ça va chercher le nouveau hash automatiquement)
         loadStudents();
 
     } catch (error) {
         console.error(error);
-        statusMsg.innerText = "Erreur ou Annulation.";
+        statusMsg.innerText = "Erreur : " + error.message;
         statusMsg.style.color = "#ef4444";
     }
 }
 
-// --- 5. CHARGEMENT ET AFFICHAGE ---
+// --- 5. CHARGEMENT INTELLIGENT (AVEC VRAIS HASHES) ---
 async function loadStudents() {
-    tableBody.innerHTML = "";
+    const tableBody = document.getElementById('tableBody');
+    tableBody.innerHTML = '<tr><td colspan="5" class="text-center">Chargement depuis la Blockchain...</td></tr>';
+    
     try {
-        const students = await contract.getAllStudents();
+        const myAddress = await signer.getAddress();
+        
+        // A. On récupère les étudiants
+        const students = await contract.getMyStudents();
 
-        students.forEach(s => {
+        // B. TECHNIQUE PRO : On récupère l'historique des événements "StudentAdded"
+        // pour retrouver les Hashes de transaction
+        const filter = contract.filters.StudentAdded(myAddress);
+        const events = await contract.queryFilter(filter);
+
+        // On crée un dictionnaire : ID -> Hash
+        const idToHash = {};
+        events.forEach(event => {
+            // event.args[1] est l'ID dans l'événement StudentAdded(user, id, name)
+            const id = event.args[1].toString();
+            idToHash[id] = event.transactionHash;
+        });
+
+        tableBody.innerHTML = ""; // On vide le chargement
+
+        if (students.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="padding:20px;">Aucun étudiant.</td></tr>`;
+            return;
+        }
+
+        // On inverse la boucle pour voir les nouveaux en premier (optionnel, sinon forEach classique)
+        for(let i = 0; i < students.length; i++) {
+            const s = students[i];
             if (s.exists) {
-                // Récupérer le hash stocké localement
-                const storedHash = localStorage.getItem(`hash_student_${s.id}`);
+                // On cherche le vrai hash venant de l'événement
+                const realHash = idToHash[s.id.toString()];
                 
-                // Si on a le hash, on met le lien, sinon "Archivé" (pour les anciens)
-                let hashDisplay;
-                if (storedHash) {
-                    hashDisplay = `<a href="https://sepolia.etherscan.io/tx/${storedHash}" target="_blank" class="hash-link">
-                        ${storedHash.substring(0, 6)}...${storedHash.substring(62)} ↗
+                let hashDisplay = "...";
+                if (realHash) {
+                    hashDisplay = `<a href="https://sepolia.etherscan.io/tx/${realHash}" target="_blank" class="hash-link">
+                        ${realHash.substring(0, 10)}... ↗
                     </a>`;
                 } else {
-                    hashDisplay = `<span style="color:var(--text-muted); font-size:0.8rem;">Non disponible</span>`;
+                    hashDisplay = `<span style="opacity:0.5">Ancien (Non-indexé)</span>`;
                 }
 
                 const row = `
@@ -167,12 +194,27 @@ async function loadStudents() {
                         <td><b>#${s.id}</b></td>
                         <td>${s.firstName} ${s.lastName}</td>
                         <td>${s.dob}</td>
-                        <td><span style="font-weight:bold; color:var(--primary);">${s.average}/20</span></td>
+                        <td><span style="color:var(--primary); font-weight:bold">${s.average}/20</span></td>
                         <td>${hashDisplay}</td>
                     </tr>
                 `;
                 tableBody.innerHTML += row;
             }
-        });
-    } catch (err) { console.error("Erreur chargement", err); }
+        }
+    } catch (err) { 
+        console.error("Erreur chargement:", err); 
+        tableBody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:red">Erreur Web3</td></tr>`;
+    }
+}
+
+// Thème
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const target = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', target);
+    localStorage.setItem('theme', target);
+    updateThemeBtnText(target);
+}
+function updateThemeBtnText(theme) {
+    document.querySelector('.theme-toggle').innerText = theme === 'dark' ? '☀ Mode Jour' : '☾ Mode Nuit';
 }

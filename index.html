@@ -1,177 +1,252 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registre Étudiants - Web3</title>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+    <title>Student Ledger - Web3</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <style>
-        /* --- CONFIGURATION DES COULEURS (Thèmes) --- */
         :root {
-            /* Mode Sombre (Défaut) */
-            --bg-color: #0f172a;       /* Bleu nuit très sombre */
-            --card-bg: #1e293b;        /* Gris bleuté */
-            --text-main: #f8fafc;      /* Blanc cassé */
-            --text-muted: #94a3b8;     /* Gris clair */
-            --primary: #3b82f6;        /* Bleu électrique */
-            --border: #334155;
-            --input-bg: #0f172a;
+            /* Palette Dark Mode "Fintech" */
+            --bg-color: #0b0f19;       
+            --card-bg: #151b2b;        
+            --text-main: #f1f5f9;      
+            --text-muted: #94a3b8;     
+            --primary: #6366f1;        
+            --primary-hover: #4f46e5;
+            --border: #1e293b;
+            --input-bg: #0b0f19;
+            --success: #10b981;
         }
 
         [data-theme="light"] {
-            /* Mode Clair */
-            --bg-color: #f1f5f9;
+            --bg-color: #f8fafc;
             --card-bg: #ffffff;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-            --primary: #2563eb;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
             --border: #e2e8f0;
-            --input-bg: #f8fafc;
+            --input-bg: #f1f5f9;
         }
 
         body { 
-            font-family: 'Manrope', sans-serif; 
+            font-family: 'Inter', sans-serif; 
             background-color: var(--bg-color); 
             color: var(--text-main); 
             margin: 0; padding: 0; 
-            transition: background-color 0.3s, color 0.3s;
-            min-height: 100vh;
-            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            min-height: 100vh; 
+            display: flex; flex-direction: column; align-items: center; 
+            transition: background-color 0.4s ease;
         }
 
-        /* --- HEADER & NAVIGATION --- */
-        .navbar {
-            width: 100%; max-width: 1000px; padding: 20px;
-            display: flex; justify-content: space-between; align-items: center;
+        /* --- ANIMATIONS CASCADES --- */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .brand { font-size: 1.5rem; font-weight: 800; letter-spacing: -1px; }
+
+        .anim-1 { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; }
+        .anim-2 { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s forwards; opacity: 0; } /* Délai 0.2s */
+        .anim-3 { animation: fadeInUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s forwards; opacity: 0; } /* Délai 0.4s */
+
+        /* --- LOADER --- */
+        #loader-overlay { position: fixed; inset: 0; background: var(--bg-color); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.6s ease-out; }
+        .spinner-ring { width: 60px; height: 60px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 25px; }
         
-        .theme-toggle {
-            background: none; border: 1px solid var(--border); color: var(--text-main);
-            padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.9rem;
+        /* --- NAVBAR --- */
+        .navbar { 
+            width: 100%; max-width: 1100px; padding: 25px 20px; 
+            display: flex; justify-content: space-between; align-items: center; 
+            box-sizing: border-box;
         }
-        .theme-toggle:hover { background-color: var(--border); }
+        .brand { 
+            font-family: 'Space Grotesk', sans-serif; /* Police titre */
+            font-size: 1.5rem; font-weight: 700; letter-spacing: -1px; 
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%); 
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        [data-theme="light"] .brand { background: linear-gradient(135deg, #0f172a 0%, #4f46e5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        /* --- CONTAINER --- */
-        .main-container {
-            width: 90%; max-width: 1000px; margin-top: 40px;
-            animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
+        .theme-toggle { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; transition: 0.3s; }
+        .theme-toggle:hover { border-color: var(--primary); color: var(--primary); }
 
-        /* --- TIMER LOADING --- */
-        #loader-overlay {
-            position: fixed; inset: 0; background: var(--bg-color); z-index: 1000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .spinner-ring {
-            width: 40px; height: 40px; border: 4px solid var(--border); 
-            border-top-color: var(--primary); border-radius: 50%;
-            animation: spin 0.8s linear infinite; margin-bottom: 15px;
-        }
-
-        /* --- CARTES & FORMULAIRES --- */
-        .card {
-            background-color: var(--card-bg); border: 1px solid var(--border);
-            border-radius: 12px; padding: 25px; margin-bottom: 30px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        /* --- CONTAINERS --- */
+        .main-container { width: 90%; max-width: 900px; margin-top: 60px; padding-bottom: 50px; }
+        
+        .card { 
+            background-color: var(--card-bg); border: 1px solid var(--border); 
+            border-radius: 16px; padding: 40px; margin-bottom: 25px; 
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.2);
         }
 
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; }
+        /* --- ACCUEIL (Welcome Screen) --- */
+        .welcome-box {
+            max-width: 650px; margin: 0 auto; text-align: center; border: none; background: transparent; box-shadow: none;
+        }
+        .welcome-title { 
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 3.5rem; font-weight: 700; margin-bottom: 20px; line-height: 1.1; 
+            background: linear-gradient(135deg, var(--text-main) 0%, var(--text-muted) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .welcome-text { 
+            color: var(--text-muted); font-size: 1.25rem; line-height: 1.6; margin-bottom: 50px; font-weight: 400;
+        }
 
-        input {
-            width: 100%; padding: 14px; background-color: var(--input-bg);
-            border: 1px solid var(--border); border-radius: 8px;
-            color: var(--text-main); font-family: inherit; box-sizing: border-box;
+        /* --- INPUTS & BOUTONS --- */
+        input { 
+            width: 100%; padding: 16px; background-color: var(--input-bg); 
+            border: 1px solid var(--border); border-radius: 8px; 
+            color: var(--text-main); margin-bottom: 15px; box-sizing: border-box; 
+            font-family: inherit; transition: border-color 0.3s;
         }
         input:focus { outline: none; border-color: var(--primary); }
 
-        /* --- BOUTONS --- */
-        .btn-primary {
-            background-color: var(--primary); color: white; border: none;
-            padding: 14px 28px; border-radius: 8px; font-weight: 600; cursor: pointer;
-            width: 100%; font-size: 1rem; transition: transform 0.2s;
+        .btn-primary { 
+            background-color: var(--primary); color: white; border: none; 
+            padding: 16px 32px; border-radius: 12px; font-weight: 600; cursor: pointer; 
+            width: 100%; font-size: 1rem; transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);
         }
-        .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 6px 25px rgba(99, 102, 241, 0.4); }
+        
+        .btn-outline { 
+            background: transparent; border: 2px solid var(--border); color: var(--text-main); 
+            padding: 14px 24px; border-radius: 12px; font-weight: 600; cursor: pointer; 
+            width: 100%; font-size: 1rem; transition: 0.3s; 
+        }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: rgba(99, 102, 241, 0.05); }
+
+        .btn-row { display: flex; gap: 20px; justify-content: center; margin-top: 10px; }
 
         /* --- TABLEAU --- */
+        .table-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
         table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-        th { text-align: left; padding: 15px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border); }
-        td { padding: 15px; border-bottom: 1px solid var(--border); }
+        th { text-align: left; padding: 18px; background-color: rgba(255,255,255,0.02); color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+        td { padding: 18px; border-bottom: 1px solid var(--border); color: var(--text-main); }
         tr:last-child td { border-bottom: none; }
-
-        .hash-link {
-            color: var(--primary); text-decoration: none; font-weight: 600;
-            background: rgba(59, 130, 246, 0.1); padding: 5px 10px; border-radius: 4px; font-size: 0.85rem;
+        
+        .hash-link { 
+            color: var(--primary); font-family: 'Monaco', monospace; 
+            background: rgba(99, 102, 241, 0.1); padding: 6px 12px; border-radius: 6px; 
+            font-size: 0.85rem; text-decoration: none; display: inline-block; transition: 0.2s;
         }
-        .hash-link:hover { text-decoration: underline; background: rgba(59, 130, 246, 0.2); }
+        .hash-link:hover { background: rgba(99, 102, 241, 0.2); transform: translateY(-1px); }
 
-        /* --- UTILITAIRES --- */
         .hidden { display: none !important; }
         .text-center { text-align: center; }
-        #status-msg { margin-top: 15px; font-size: 0.9rem; text-align: center; color: var(--text-muted); }
-
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
         @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Ajustements Mobile */
+        @media (max-width: 600px) {
+            .welcome-title { font-size: 2.5rem; }
+            .btn-row { flex-direction: column; gap: 10px; }
+        }
     </style>
 </head>
 <body>
 
     <div id="loader-overlay">
         <div class="spinner-ring"></div>
-        <div style="color: var(--text-muted); font-size: 0.9rem;">Vérification de l'environnement Web3...</div>
+        <div id="loading-text" style="color: var(--text-muted); font-size: 0.9rem; letter-spacing: 2px; font-weight: 600;">INITIALISATION...</div>
     </div>
 
     <nav class="navbar">
-        <div class="brand">🎓 Registre Étudiants</div>
-        <button class="theme-toggle" onclick="toggleTheme()">☀ Mode Jour</button>
+        <div class="brand">Student Ledger</div>
+        <button class="theme-toggle" onclick="toggleTheme()">☀</button>
     </nav>
 
     <div class="main-container hidden" id="app-content">
         
-        <div id="connect-section" class="text-center" style="margin-top: 100px;">
-            <p style="color: var(--text-muted); margin-bottom: 20px;">Veuillez connecter votre portefeuille pour accéder au registre.</p>
-            <button class="btn-primary" id="connectBtn" style="max-width: 300px;">Connecter MetaMask</button>
-            <p id="install-alert" class="hidden" style="color: #ef4444; margin-top: 10px;">MetaMask non détecté.</p>
+        <div id="welcome-screen" class="welcome-box">
+            <h1 class="welcome-title anim-1">Student Ledger</h1>
+            
+            <p class="welcome-text anim-2">
+                Bienvenue dans Student Ledger, la web app décentralisée pour gérer et sécuriser les bases de données des étudiants sur la blockchain.
+            </p>
+            
+            <div class="anim-3" style="background: var(--card-bg); padding: 30px; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                <h3 style="margin-top:0; margin-bottom: 20px; font-weight: 600;">Avez-vous un portefeuille MetaMask ?</h3>
+                <div class="btn-row">
+                    <button class="btn-primary" onclick="userHasMetaMask(true)">Oui, j'ai MetaMask</button>
+                    <button class="btn-outline" onclick="userHasMetaMask(false)">Non, je ne l'ai pas</button>
+                </div>
+            </div>
         </div>
 
-        <div id="dashboard" class="hidden">
+        <div id="connect-section" class="text-center hidden" style="margin-top: 50px; max-width: 500px; margin-left: auto; margin-right: auto;">
+            
+            <div id="connect-block" class="card hidden anim-1">
+                <div style="font-size: 3rem; margin-bottom: 20px;">🦊</div>
+                <h3>Synchronisation Web3</h3>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Portefeuille détecté. Veuillez établir la connexion sécurisée.</p>
+                <button class="btn-primary" id="connectBtn">Connecter mon Portefeuille</button>
+                
+                <div id="mobile-deep-link" class="hidden" style="margin-top: 20px;">
+                    <button id="mobileBtn" class="btn-primary" style="background: linear-gradient(45deg, #f7971e, #ffd200); color: #000;">
+                        Ouvrir dans l'App MetaMask
+                    </button>
+                </div>
+            </div>
+
+            <div id="download-block" class="card hidden anim-1">
+                <div style="font-size: 3rem; margin-bottom: 20px;">⚠️</div>
+                <h3 style="color: #ef4444;">Accès Restreint</h3>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">L'écriture sur la Blockchain nécessite un portefeuille numérique.</p>
+                
+                <a href="https://metamask.io/download/" target="_blank" class="btn-primary" style="display:block; text-decoration:none; margin-bottom: 15px;">
+                    Télécharger MetaMask
+                </a>
+                <button class="btn-outline" onclick="location.reload()">Retour</button>
+            </div>
+        </div>
+
+        <div id="dashboard" class="hidden anim-1">
             
             <div class="card">
-                <h3 style="margin-top: 0; margin-bottom: 20px;">Ajouter un nouvel étudiant</h3>
-                <div class="form-row">
-                    <input type="text" id="fName" placeholder="Prénom (ex: Jean)">
-                    <input type="text" id="lName" placeholder="Nom (ex: Dupont)">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
+                    <h3 style="margin:0; font-family: 'Space Grotesk', sans-serif;">Nouveau Dossier</h3>
+                    <span style="font-size:0.75rem; color:var(--success); background: rgba(16, 185, 129, 0.1); padding: 6px 12px; border-radius: 20px; font-weight: 600; letter-spacing: 0.5px;">● LIVE SEPOLIA</span>
                 </div>
-                <div class="form-row">
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <input type="text" id="fName" placeholder="Prénom">
+                    <input type="text" id="lName" placeholder="Nom">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <input type="date" id="dob">
-                    <input type="number" id="avg" placeholder="Moyenne / 20">
+                    <input type="number" id="avg" placeholder="Moyenne (0-20)">
                 </div>
-                <button class="btn-primary" onclick="addStudent()">Enregistrer sur la Blockchain</button>
-                <div id="status-msg"></div>
+                
+                <button class="btn-primary" onclick="addStudent()" style="margin-top: 10px;">Enregistrer sur la Blockchain</button>
+                <p id="status-msg" class="text-center" style="margin-top:20px; font-weight: 500; font-size: 0.9rem;"></p>
             </div>
 
             <div class="card">
-                <h3 style="margin-top: 0; margin-bottom: 20px;">Base de données (Sepolia)</h3>
-                <table id="studentTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Identité</th>
-                            <th>Date Naissance</th>
-                            <th>Note</th>
-                            <th>Hashes (Transaction)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        </tbody>
-                </table>
+                <h3 style="margin-top:0; margin-bottom: 25px; font-family: 'Space Grotesk', sans-serif;">Registre (Ledger)</h3>
+                <div class="table-wrapper">
+                    <table id="studentTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">ID</th>
+                                <th>Étudiant</th>
+                                <th>Date Naissance</th>
+                                <th>Note</th>
+                                <th>Hash (Preuve)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
     <script src="config.js"></script>
     <script src="app.js"></script>
-
 </body>
 </html>
