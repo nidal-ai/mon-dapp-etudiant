@@ -50,7 +50,7 @@ Pour utiliser cette DApp, vous devez avoir :
 
 ### Accès Rapide (Démo en ligne)
 Le projet est hébergé et accessible directement ici :
-👉 **https://nidal-ai.github.io/mon-dapp-etudiant/**
+👉 **https://nidal-ai.github.io/student-ledger/**
 
 📸 Aperçu
 L'application guide l'utilisateur à travers 3 étapes :
