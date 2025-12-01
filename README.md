@@ -81,8 +81,9 @@ Le projet est également disponible sous forme d'image conteneurisée sur **Dock
 docker pull nidal49/student-ledger:v1
 ```
 Lancer le conteneur :
+```bash
 docker run -d -p 8080:80 nidal49/student-ledger:v1
-
+```
 Ouvrez votre navigateur et allez sur http://localhost:8080 pour voir l'application.
 
 Note : La commande run map le port 80 du conteneur vers le port 8080 de votre machine locale.
