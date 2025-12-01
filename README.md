@@ -79,7 +79,7 @@ Le projet est également disponible sous forme d'image conteneurisée sur **Dock
 **Télécharger l'image :**
 ```bash
 docker pull nidal49/student-ledger:v1
-
+'''
 Lancer le conteneur :
 docker run -d -p 8080:80 nidal49/student-ledger:v1
 
