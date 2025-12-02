@@ -1,16 +1,37 @@
 // config.js
 // Ce fichier contient les paramètres de la Blockchain.
 // Il est séparé pour faciliter la maintenance et le changement de contrat.
+//ipfs://
+const CONTRACT_ADDRESS = "0xD59d1C6afff9263F2Dcd46d55d974daCCB2a30d2";
 
-const CONTRACT_ADDRESS = "0x27f362936AE9000FDBf0e01f1D6F611eCA971C42";
-
-const CONTRACT_ABI = [
+const CONTRACT_ABI =[
 	{
 		"inputs": [
-			{ "internalType": "string", "name": "_fName", "type": "string" },
-			{ "internalType": "string", "name": "_lName", "type": "string" },
-			{ "internalType": "string", "name": "_dob", "type": "string" },
-			{ "internalType": "uint256", "name": "_avg", "type": "uint256" }
+			{
+				"internalType": "string",
+				"name": "_fName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_lName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_dob",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_avg",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_diplomaId",
+				"type": "uint256"
+			}
 		],
 		"name": "addStudent",
 		"outputs": [],
@@ -20,9 +41,24 @@ const CONTRACT_ABI = [
 	{
 		"anonymous": false,
 		"inputs": [
-			{ "indexed": true, "internalType": "address", "name": "user", "type": "address" },
-			{ "indexed": false, "internalType": "uint256", "name": "id", "type": "uint256" },
-			{ "indexed": false, "internalType": "string", "name": "firstName", "type": "string" }
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "firstName",
+				"type": "string"
+			}
 		],
 		"name": "StudentAdded",
 		"type": "event"
@@ -33,12 +69,41 @@ const CONTRACT_ABI = [
 		"outputs": [
 			{
 				"components": [
-					{ "internalType": "uint256", "name": "id", "type": "uint256" },
-					{ "internalType": "string", "name": "firstName", "type": "string" },
-					{ "internalType": "string", "name": "lastName", "type": "string" },
-					{ "internalType": "string", "name": "dob", "type": "string" },
-					{ "internalType": "uint256", "name": "average", "type": "uint256" },
-					{ "internalType": "bool", "name": "exists", "type": "bool" }
+					{
+						"internalType": "uint256",
+						"name": "id",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "firstName",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "lastName",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "dob",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "average",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "diplomaId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "exists",
+						"type": "bool"
+					}
 				],
 				"internalType": "struct PersonalStudentRegistry.Student[]",
 				"name": "",
@@ -48,12 +113,11 @@ const CONTRACT_ABI = [
 		"stateMutability": "view",
 		"type": "function"
 	}
-];
-
+]
 // --- AJOUT : CONFIGURATION NFT (DIPLÔMES) ---
 
 // Colle ici l'adresse de ton contrat NFT (DiplomaNFT) déployé sur Remix
-const NFT_CONTRACT_ADDRESS = "0xb0E758e95c3DD16bb495bBF95F135631681aC701";
+const NFT_CONTRACT_ADDRESS = "0x2f56d7c7CeD491c51831Db4D64EEb42C231d555e";
 
 // L'ABI minimal pour lire les NFTs
 const NFT_ABI =[

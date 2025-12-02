@@ -1,17 +1,15 @@
 let provider, signer, contract;
 
 // ==========================================
-// 1. INITIALISATION & THEME
+// 1. INITIALISATION
 // ==========================================
 window.onload = () => {
     if (typeof CONTRACT_ADDRESS === 'undefined') { alert("Erreur: config.js manquant"); return; }
     
-    // Gestion du thème
     const savedTheme = localStorage.getItem('theme') || 'dark';
     if (savedTheme === 'dark') document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
 
-    // Animation de chargement
     setTimeout(() => {
         const loader = document.getElementById('loader-overlay');
         const content = document.getElementById('app-content');
@@ -81,26 +79,54 @@ window.checkMobileEnv = function() {
 // 3. LOGIQUE REGISTRE ÉTUDIANT
 // ==========================================
 window.addStudent = async function() {
-    const fName = document.getElementById('fName').value;
-    const lName = document.getElementById('lName').value;
+    const fName = document.getElementById('fName').value.trim();
+    const lName = document.getElementById('lName').value.trim();
     const dob = document.getElementById('dob').value;
     const avg = document.getElementById('avg').value;
+    let diplomaId = 0;
+    const diplomaInput = document.getElementById('diplomaId'); 
+    if (diplomaInput && diplomaInput.value) diplomaId = diplomaInput.value;
+
     const statusMsg = document.getElementById('status-msg');
 
-    if (!fName || !lName || !avg) return alert("Veuillez remplir tous les champs");
+    if (!fName || !lName || !dob || !avg) return alert("Veuillez remplir tous les champs");
+
+    // Validation Date
+    const birthYear = parseInt(dob.split('-')[0]);
+    const currentYear = new Date().getFullYear();
+    if (birthYear < 1960 || birthYear > (currentYear - 16)) {
+        return alert(`Erreur : L'année ${birthYear} n'est pas réaliste !`);
+    }
 
     try {
+        statusMsg.innerText = "Vérification doublons...";
+        statusMsg.className = "text-blue-500 text-xs mt-4 text-center";
+
+        const existingStudents = await contract.getMyStudents();
+        for (let s of existingStudents) {
+            if (s.exists && s.firstName.toLowerCase() === fName.toLowerCase() && s.lastName.toLowerCase() === lName.toLowerCase()) {
+                statusMsg.innerText = "";
+                return alert(`Attention : ${fName} ${lName} existe déjà !`);
+            }
+        }
+
         statusMsg.innerText = "Signature requise...";
         statusMsg.className = "text-blue-500 animate-pulse text-xs mt-4 text-center font-medium";
-        const tx = await contract.addStudent(fName, lName, dob, avg);
+        
+        const tx = await contract.addStudent(fName, lName, dob, avg, diplomaId);
+        
         statusMsg.innerText = "Envoi transaction...";
         await tx.wait();
+        
         statusMsg.innerText = "Enregistré avec succès !";
         statusMsg.className = "text-emerald-500 font-bold text-xs mt-4 text-center";
         
         document.getElementById('fName').value = "";
         document.getElementById('lName').value = "";
+        document.getElementById('dob').value = "";
         document.getElementById('avg').value = "";
+        if(diplomaInput) diplomaInput.value = "";
+        
         loadStudents();
     } catch (error) {
         console.error(error);
@@ -149,7 +175,7 @@ async function loadStudents() {
     const tableBody = document.getElementById('tableBody');
     if(!tableBody) return;
     
-    tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Chargement...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Chargement...</td></tr>';
     
     try {
         const myAddress = await signer.getAddress();
@@ -165,7 +191,7 @@ async function loadStudents() {
         let realTotalCount = 0;
 
         if (students.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Aucun dossier.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Aucun dossier.</td></tr>`;
             document.getElementById('stat-total').innerText = "0";
             document.getElementById('footer-count').innerText = "Total: 0 dossier(s)";
             return;
@@ -188,11 +214,17 @@ async function loadStudents() {
                     dateDisplay = `${dd}/${mm}/${yyyy}`;
                 }
 
+                let diplomaBadge = `<span class="text-gray-400 text-xs opacity-50">-</span>`;
+                if (s.diplomaId && s.diplomaId > 0) {
+                     diplomaBadge = `<button onclick="document.getElementById('nftTokenId').value='${s.diplomaId}'; verifyDiploma();" class="px-2 py-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400 border border-purple-200 dark:border-purple-500/30 text-xs font-bold hover:scale-105 transition-transform cursor-pointer">NFT #${s.diplomaId}</button>`;
+                }
+
                 const row = `<tr class="border-b border-gray-200 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                         <td class="py-3 px-4 font-bold text-left text-gray-900 dark:text-white">${s.firstName}</td>
                         <td class="py-3 px-4 font-bold text-left text-gray-900 dark:text-white">${s.lastName}</td>
                         <td class="py-3 px-4 text-center text-gray-600 dark:text-slate-400">${dateDisplay}</td>
                         <td class="py-3 px-4 text-center"><span class="px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 font-bold text-xs">${s.average}/20</span></td>
+                        <td class="py-3 px-4 text-center">${diplomaBadge}</td>
                         <td class="py-3 px-4 text-center">${hashDisplay}</td>
                     </tr>`;
                 tableBody.innerHTML += row;
@@ -228,42 +260,43 @@ window.filterStudents = function() {
 };
 
 // ==========================================
-// 4. MODULE NFT (VÉRIFICATION + QR CODE)
+// 4. MODULE NFT (VÉRIFICATION) - CORRECTIF
 // ==========================================
 async function verifyDiploma() {
     const tokenId = document.getElementById('nftTokenId').value;
     const resultDiv = document.getElementById('nft-result');
     const errorMsg = document.getElementById('nft-error');
     
-    // Reset
     resultDiv.classList.add('hidden');
     errorMsg.classList.add('hidden');
 
     if (tokenId === "") return alert("Veuillez entrer un ID");
 
     try {
-        console.log("Adresse Contrat NFT :", NFT_CONTRACT_ADDRESS);
-
+        // 1. Connexion au Contrat NFT
         const nftContract = new ethers.Contract(NFT_CONTRACT_ADDRESS, NFT_ABI, provider);
         
-        // 1. Appel Blockchain
+        // 2. Récupération des infos Blockchain
         const tokenURI = await nftContract.tokenURI(tokenId);
         const owner = await nftContract.ownerOf(tokenId);
         
-        // 2. Nettoyage du lien IPFS (Passerelle Universelle)
-        let cleanURI = tokenURI.replace("ipfs://", "").replace("ipfs/", "");
-        const gateway = "https://ipfs.io/ipfs/"; 
-        const httpURI = gateway + cleanURI;
+        // 3. CONSTRUCTION DE L'URL IPFS (La partie importante)
+        // On nettoie le lien brut venant du contrat pour avoir juste le CID
+        let cid = tokenURI.replace("ipfs://", "").replace("ipfs/", "");
+        
+        // On utilise la passerelle officielle IPFS.IO (Plus fiable que Cloudflare)
+        const gateway = "https://ipfs.io/ipfs/";
+        const httpURI = gateway + cid;
 
-        console.log("Téléchargement :", httpURI);
+        console.log("Fetching JSON from:", httpURI);
 
-        // 3. Récupération JSON
+        // 4. Téléchargement du JSON
         const response = await fetch(httpURI);
-        if (!response.ok) throw new Error("Erreur réseau IPFS (" + response.status + "). Réessayez dans 30s.");
+        if (!response.ok) throw new Error("Impossible de lire le fichier IPFS. Vérifiez votre connexion ou l'ID.");
         
         const metadata = await response.json();
 
-        // 4. Extraction Données
+        // 5. Extraction des données
         let firstName = "Non spécifié";
         let lastName = "";
         let cin = "--";
@@ -281,15 +314,14 @@ async function verifyDiploma() {
             if (dateAttr) date = dateAttr.value;
         }
 
-        // 5. Affichage
+        // 6. Affichage dans le HTML
         document.getElementById('nft-title').innerText = metadata.name;
         document.getElementById('nft-desc').innerText = metadata.description;
         
-        // Image
-        let imgRaw = metadata.image.replace("ipfs://", "").replace("ipfs/", "");
-        document.getElementById('nft-image').src = gateway + imgRaw;
+        // Pour l'image, on fait le même nettoyage
+        let imgCid = metadata.image.replace("ipfs://", "").replace("ipfs/", "");
+        document.getElementById('nft-image').src = gateway + imgCid;
 
-        // Champs
         document.getElementById('nft-student-name').innerText = `${firstName} ${lastName}`;
         document.getElementById('nft-cin').innerText = cin;
         document.getElementById('nft-date').innerText = date;
@@ -299,10 +331,10 @@ async function verifyDiploma() {
         document.getElementById('nft-etherscan-link').href = etherscanLink;
         document.getElementById('nft-owner-addr').innerText = "Propriétaire: " + owner;
 
-        // 6. GÉNÉRATION DU QR CODE
+        // 7. Génération QR Code
         const qrContainer = document.getElementById("qrcode");
         if(qrContainer) {
-            qrContainer.innerHTML = ""; // Vider l'ancien
+            qrContainer.innerHTML = ""; 
             new QRCode(qrContainer, {
                 text: etherscanLink,
                 width: 60,
@@ -314,11 +346,12 @@ async function verifyDiploma() {
         }
 
         resultDiv.classList.remove('hidden');
+        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     } catch (err) {
-        console.error("ERREUR:", err);
+        console.error("ERREUR NFT:", err);
         if (err.code === 'CALL_EXCEPTION') {
-            errorMsg.innerText = "Erreur : Cet ID (" + tokenId + ") n'existe pas sur ce contrat.";
+            errorMsg.innerText = "Erreur : Cet ID n'existe pas dans le contrat.";
         } else {
             errorMsg.innerText = "Erreur : " + err.message;
         }
