@@ -1,7 +1,7 @@
 let provider, signer, contract;
 
 // ==========================================
-// 1. INITIALISATION
+// 1. INITIALISATION & THEME
 // ==========================================
 window.onload = () => {
     if (typeof CONTRACT_ADDRESS === 'undefined') { alert("Erreur: config.js manquant"); return; }
@@ -89,7 +89,7 @@ window.addStudent = async function() {
 
     const statusMsg = document.getElementById('status-msg');
 
-    if (!fName || !lName || !dob || !avg) return alert("Veuillez remplir tous les champs");
+    if (!fName || !lName || !dob || !avg) return alert("Veuillez remplir tous les champs obligatoires");
 
     // Validation Date
     const birthYear = parseInt(dob.split('-')[0]);
@@ -99,9 +99,10 @@ window.addStudent = async function() {
     }
 
     try {
-        statusMsg.innerText = "Vérification doublons...";
+        statusMsg.innerText = "Vérifications en cours...";
         statusMsg.className = "text-blue-500 text-xs mt-4 text-center";
 
+        // Sécurité A : Doublons
         const existingStudents = await contract.getMyStudents();
         for (let s of existingStudents) {
             if (s.exists && s.firstName.toLowerCase() === fName.toLowerCase() && s.lastName.toLowerCase() === lName.toLowerCase()) {
@@ -110,27 +111,66 @@ window.addStudent = async function() {
             }
         }
 
+        // Sécurité B : Vérification d'Existence du NFT et de PROPRIÉTÉ
+        if (diplomaId !== "0") {
+            try {
+                const nftContract = new ethers.Contract(NFT_CONTRACT_ADDRESS, NFT_ABI, provider);
+                const nftOwnerAddress = await nftContract.ownerOf(diplomaId); 
+                const connectedAddress = await signer.getAddress();
+                
+                if (nftOwnerAddress.toLowerCase() !== connectedAddress.toLowerCase()) {
+                    statusMsg.innerText = "";
+                    return alert(`ERREUR DE SÉCURITÉ : Vous ne possédez pas ce Diplôme NFT #${diplomaId}.`);
+                }
+                
+            } catch (error) {
+                statusMsg.innerText = "";
+                return alert(`Erreur : Le Diplôme NFT #${diplomaId} n'existe pas ou est invalide.`);
+            }
+        }
+
         statusMsg.innerText = "Signature requise...";
         statusMsg.className = "text-blue-500 animate-pulse text-xs mt-4 text-center font-medium";
         
+        // ENVOI TRANSACTION (5 arguments)
         const tx = await contract.addStudent(fName, lName, dob, avg, diplomaId);
         
-        statusMsg.innerText = "Envoi transaction...";
-        await tx.wait();
+        statusMsg.innerText = "Transaction envoyée. Attente confirmation (15-30s)...";
         
-        statusMsg.innerText = "Enregistré avec succès !";
-        statusMsg.className = "text-emerald-500 font-bold text-xs mt-4 text-center";
+        // 1. ATTENDRE LA CONFIRMATION DU MINAGE
+        const receipt = await tx.wait(); 
         
-        document.getElementById('fName').value = "";
-        document.getElementById('lName').value = "";
-        document.getElementById('dob').value = "";
-        document.getElementById('avg').value = "";
-        if(diplomaInput) diplomaInput.value = "";
-        
-        loadStudents();
+        // 2. VÉRIFIER LE STATUT (0 = ÉCHEC | 1 = SUCCÈS)
+        if (receipt.status === 1) {
+            
+            // Pas besoin de localStorage, la donnée est sur la Blockchain !
+
+            statusMsg.innerText = "✅ Enregistré avec succès !";
+            statusMsg.className = "text-emerald-500 font-bold text-xs mt-4 text-center";
+            
+            // Reset et rechargement
+            document.getElementById('fName').value = "";
+            document.getElementById('lName').value = "";
+            document.getElementById('dob').value = "";
+            document.getElementById('avg').value = "";
+            if(diplomaInput) diplomaInput.value = "";
+            
+            loadStudents();
+
+        } else {
+             throw new Error("Transaction révoquée par le contrat (statut 0).");
+        }
+
     } catch (error) {
-        console.error(error);
-        statusMsg.innerText = "Erreur Transaction";
+        let errorMessage = "Erreur de connexion/réseau.";
+        
+        if (error.code === 4001) {
+            errorMessage = "Opération annulée par l'utilisateur (MetaMask).";
+        } else if (error.message && error.message.includes("reverted")) {
+            errorMessage = "Erreur de Transaction (Contrat révoqué). Vérifiez les permissions.";
+        }
+        
+        statusMsg.innerText = errorMessage;
         statusMsg.className = "text-red-500 text-xs mt-4 text-center font-medium";
     }
 };
@@ -143,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function connectWallet() {
     if (!window.ethereum) return alert("MetaMask introuvable");
     try {
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        await window.ethereum.request({ method: 'eth_accounts' });
         const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         if (chainId !== '0xaa36a7') {
              try {
@@ -175,7 +215,7 @@ async function loadStudents() {
     const tableBody = document.getElementById('tableBody');
     if(!tableBody) return;
     
-    tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Chargement...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="6" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Chargement des données...</td></tr>';
     
     try {
         const myAddress = await signer.getAddress();
@@ -191,7 +231,7 @@ async function loadStudents() {
         let realTotalCount = 0;
 
         if (students.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Aucun dossier.</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-center p-8 opacity-50 text-gray-600 dark:text-gray-400">Aucun dossier trouvé.</td></tr>`;
             document.getElementById('stat-total').innerText = "0";
             document.getElementById('footer-count').innerText = "Total: 0 dossier(s)";
             return;
@@ -214,9 +254,12 @@ async function loadStudents() {
                     dateDisplay = `${dd}/${mm}/${yyyy}`;
                 }
 
+                // *** CORRECTION CRITIQUE: Lecture directe de l'ID depuis le contrat (s.diplomaId) ***
+                let diplomaIdFromContract = s.diplomaId.toString(); 
                 let diplomaBadge = `<span class="text-gray-400 text-xs opacity-50">-</span>`;
-                if (s.diplomaId && s.diplomaId > 0) {
-                     diplomaBadge = `<button onclick="document.getElementById('nftTokenId').value='${s.diplomaId}'; verifyDiploma();" class="px-2 py-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400 border border-purple-200 dark:border-purple-500/30 text-xs font-bold hover:scale-105 transition-transform cursor-pointer">NFT #${s.diplomaId}</button>`;
+                
+                if (diplomaIdFromContract !== "0") {
+                     diplomaBadge = `<button onclick="document.getElementById('nftTokenId').value='${diplomaIdFromContract}'; verifyDiploma();" class="px-2 py-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400 border border-purple-200 dark:border-purple-500/30 text-xs font-bold hover:scale-105 transition-transform cursor-pointer">NFT #${diplomaIdFromContract}</button>`;
                 }
 
                 const row = `<tr class="border-b border-gray-200 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
@@ -260,7 +303,7 @@ window.filterStudents = function() {
 };
 
 // ==========================================
-// 4. MODULE NFT (VÉRIFICATION) - CORRECTIF
+// 4. MODULE NFT (VÉRIFICATION + QR CODE)
 // ==========================================
 async function verifyDiploma() {
     const tokenId = document.getElementById('nftTokenId').value;
@@ -273,30 +316,24 @@ async function verifyDiploma() {
     if (tokenId === "") return alert("Veuillez entrer un ID");
 
     try {
-        // 1. Connexion au Contrat NFT
         const nftContract = new ethers.Contract(NFT_CONTRACT_ADDRESS, NFT_ABI, provider);
         
-        // 2. Récupération des infos Blockchain
+        // 1. Appel Blockchain
         const tokenURI = await nftContract.tokenURI(tokenId);
         const owner = await nftContract.ownerOf(tokenId);
         
-        // 3. CONSTRUCTION DE L'URL IPFS (La partie importante)
-        // On nettoie le lien brut venant du contrat pour avoir juste le CID
-        let cid = tokenURI.replace("ipfs://", "").replace("ipfs/", "");
-        
-        // On utilise la passerelle officielle IPFS.IO (Plus fiable que Cloudflare)
-        const gateway = "https://ipfs.io/ipfs/";
-        const httpURI = gateway + cid;
+        // 2. Nettoyage Lien IPFS
+        let cleanURI = tokenURI.replace("ipfs://", "").replace("ipfs/", "");
+        const gateway = "https://ipfs.io/ipfs/"; 
+        const httpURI = gateway + cleanURI;
 
-        console.log("Fetching JSON from:", httpURI);
-
-        // 4. Téléchargement du JSON
+        // 3. Récupération JSON
         const response = await fetch(httpURI);
-        if (!response.ok) throw new Error("Impossible de lire le fichier IPFS. Vérifiez votre connexion ou l'ID.");
+        if (!response.ok) throw new Error("Fichier IPFS inaccessible.");
         
         const metadata = await response.json();
 
-        // 5. Extraction des données
+        // 4. Extraction Données
         let firstName = "Non spécifié";
         let lastName = "";
         let cin = "--";
@@ -314,13 +351,12 @@ async function verifyDiploma() {
             if (dateAttr) date = dateAttr.value;
         }
 
-        // 6. Affichage dans le HTML
+        // 5. Affichage
         document.getElementById('nft-title').innerText = metadata.name;
         document.getElementById('nft-desc').innerText = metadata.description;
         
-        // Pour l'image, on fait le même nettoyage
-        let imgCid = metadata.image.replace("ipfs://", "").replace("ipfs/", "");
-        document.getElementById('nft-image').src = gateway + imgCid;
+        let imgRaw = metadata.image.replace("ipfs://", "").replace("ipfs/", "");
+        document.getElementById('nft-image').src = gateway + imgRaw;
 
         document.getElementById('nft-student-name').innerText = `${firstName} ${lastName}`;
         document.getElementById('nft-cin').innerText = cin;
@@ -331,7 +367,7 @@ async function verifyDiploma() {
         document.getElementById('nft-etherscan-link').href = etherscanLink;
         document.getElementById('nft-owner-addr').innerText = "Propriétaire: " + owner;
 
-        // 7. Génération QR Code
+        // 6. GÉNÉRATION DU QR CODE
         const qrContainer = document.getElementById("qrcode");
         if(qrContainer) {
             qrContainer.innerHTML = ""; 
@@ -351,7 +387,7 @@ async function verifyDiploma() {
     } catch (err) {
         console.error("ERREUR NFT:", err);
         if (err.code === 'CALL_EXCEPTION') {
-            errorMsg.innerText = "Erreur : Cet ID n'existe pas dans le contrat.";
+            errorMsg.innerText = "Erreur : Cet ID (" + tokenId + ") n'existe pas sur ce contrat.";
         } else {
             errorMsg.innerText = "Erreur : " + err.message;
         }

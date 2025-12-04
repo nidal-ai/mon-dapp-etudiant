@@ -2,7 +2,7 @@
 // Ce fichier contient les paramètres de la Blockchain.
 // Il est séparé pour faciliter la maintenance et le changement de contrat.
 //ipfs://
-const CONTRACT_ADDRESS = "0xD59d1C6afff9263F2Dcd46d55d974daCCB2a30d2";
+const CONTRACT_ADDRESS = "0x791ccCD9Ad1d17a06ee1a14689fF99D7225e6Efc";
 
 const CONTRACT_ABI =[
 	{
